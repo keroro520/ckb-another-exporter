@@ -1,0 +1,29 @@
+[package]
+name = "ckb-another-exporter"
+version = "0.1.0"
+authors = ["keroro <keroroxx520@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = "1.0.117"
+log = "0.4.11"
+tokio-io = "0.1.13"
+
+jsonrpc-core = "15.1"
+jsonrpc-derive = "15.1"
+jsonrpc-tcp-server = "15.1"
+jsonrpc-ws-server = "15.1"
+jsonrpc-server-utils = "15.1"
+jsonrpc-pubsub = "15.1"
+jsonrpc-core-client = "15.1"
+jsonrpc-client-transports = "15.1"
+
+ckb-metrics = "0.37.0"
+ckb-metrics-service = "0.37.0"
+ckb-metrics-config = "0.37.0"
+ckb-types = "0.37.0"
+ckb-jsonrpc-types = "0.37.0"
+
+crossbeam = "0.8.0"
