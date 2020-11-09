@@ -22,17 +22,15 @@ pub struct Exporter {
 }
 
 impl Exporter {
-    pub fn listen(receiver: Receiver<BlockView>) {
+    pub fn listen(listen_address: String, receiver: Receiver<BlockView>) {
         let mut instance = Self::default();
-        instance.listen_(receiver);
+        instance.listen_(listen_address, receiver);
     }
 
-    fn listen_(&mut self, receiver: Receiver<BlockView>) {
+    fn listen_(&mut self, listen_address: String, receiver: Receiver<BlockView>) {
         let config = {
             let prometheus = MetricsExporter {
-                target: MetricsTarget::Http {
-                    listen_address: "0.0.0.0:8200".to_string(),
-                },
+                target: MetricsTarget::Http { listen_address },
                 format: MetricsFormat::Prometheus,
             };
             let mut exporter = HashMap::new();

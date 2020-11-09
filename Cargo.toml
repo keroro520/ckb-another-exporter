@@ -27,3 +27,4 @@ ckb-types = "0.37.0"
 ckb-jsonrpc-types = "0.37.0"
 
 crossbeam = "0.8.0"
+clap = "2.33.3"

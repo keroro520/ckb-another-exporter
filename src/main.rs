@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate clap;
+
 use crossbeam::channel::bounded;
 use jsonrpc_client_transports::RpcError;
 use jsonrpc_core::{serde_from_str, Result, futures::prelude::*};
@@ -18,17 +21,22 @@ use std::thread::spawn;
 mod exporter;
 mod rpc;
 mod logger;
+mod command;
 
 use exporter::Exporter;
 use rpc::{Topic, gen_client};
 use logger::init_logger;
+use command::init_config;
 
 fn main() {
     init_logger();
+    let config = init_config();
 
     // 18114 is tcp_listen_port; 8114 is http_listen_port
-    let addr = "0.0.0.0:18114".parse::<SocketAddr>().unwrap();
-    let tcp_stream = TcpStream::connect(&addr).wait().unwrap();
+    let tcp_stream = {
+        let addr = config.ckb_tcp_listened_address.parse::<SocketAddr>().unwrap();
+        TcpStream::connect(&addr).wait().unwrap()
+    };
 
     // framed_layer is both sink and stream. use `split` to break them out.
     let framed_layer = StreamCodec::stream_incoming().framed(tcp_stream);
@@ -55,7 +63,7 @@ fn main() {
     // exporter
     let (block_sender, block_receiver) = bounded(2000);
     spawn(move || {
-        Exporter::listen(block_receiver);
+        Exporter::listen(config.listened_address.clone(), block_receiver);
     });
 
     // subscriber
