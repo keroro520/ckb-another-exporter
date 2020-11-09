@@ -13,53 +13,18 @@ use jsonrpc_server_utils::{
 use log::{self, Metadata, Record};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-
-mod exporter;
-use exporter::Exporter;
 use std::thread::spawn;
 
-struct AlwaysLogger;
+mod exporter;
+mod rpc;
+mod logger;
 
-impl log::Log for AlwaysLogger {
-    fn enabled(&self, _metadata: &Metadata) -> bool {
-        true
-    }
-
-    fn log(&self, record: &Record) {
-        if self.enabled(record.metadata()) {
-            println!("{}", record.args());
-        }
-    }
-
-    fn flush(&self) {}
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(rename_all = "snake_case")]
-pub enum Topic {
-    NewTipHeader,
-    NewTipBlock,
-    NewTransaction,
-}
-
-#[allow(clippy::needless_return)]
-#[rpc]
-pub trait SubscriptionRpc {
-    type Metadata;
-
-    #[pubsub(subscription = "subscribe", subscribe, name = "subscribe")]
-    fn subscribe(&self, meta: Self::Metadata, subscriber: Subscriber<String>, topic: Topic);
-
-    #[pubsub(subscription = "subscribe", unsubscribe, name = "unsubscribe")]
-    fn unsubscribe(&self, meta: Option<Self::Metadata>, id: SubscriptionId) -> Result<bool>;
-}
-
-static LOGGER: AlwaysLogger = AlwaysLogger;
+use exporter::Exporter;
+use rpc::{Topic, gen_client};
+use logger::init_logger;
 
 fn main() {
-    log::set_logger(&LOGGER)
-        .map(|()| log::set_max_level(log::LevelFilter::Info))
-        .unwrap();
+    init_logger();
 
     // 18114 is tcp_listen_port; 8114 is http_listen_port
     let addr = "0.0.0.0:18114".parse::<SocketAddr>().unwrap();
