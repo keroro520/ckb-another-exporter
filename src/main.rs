@@ -2,25 +2,20 @@
 extern crate clap;
 
 mod command;
-mod exporter;
 mod logger;
 mod rpc;
 mod subscription;
 
-use command::{init_config, Config};
-use exporter::Exporter;
-use logger::init_logger;
-use rpc::{gen_client, Topic};
-use subscription::subscribe;
-use jsonrpc_core::{
-    futures::future,
-    futures::prelude::*,
-};
 use ckb_metrics_config::{
     Config as MetricsConfig, Exporter as MetricsExporter, Format as MetricsFormat,
     Target as MetricsTarget,
 };
+use command::{init_config, Config};
+use jsonrpc_server_utils::tokio;
+use logger::init_logger;
+use rpc::{gen_client, Topic};
 use std::collections::HashMap;
+use subscription::subscribe;
 
 fn main() {
     let Config {
@@ -30,12 +25,7 @@ fn main() {
     init_logger();
     let _guard = init_metrics_service(listened_address);
 
-    let (block_sender, block_receiver) = crossbeam::channel::bounded(2000);
-    ::std::thread::spawn(move || {
-        Exporter::default().listen(block_receiver);
-    });
-
-    let subscription_future = subscribe(&ckb_tcp_listened_address, block_sender);
+    tokio::run(subscribe(&ckb_tcp_listened_address))
 }
 
 fn init_metrics_service(listen_address: String) -> ckb_metrics_service::Guard {
