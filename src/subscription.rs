@@ -1,7 +1,7 @@
 use crate::{gen_client, Topic};
 use crossbeam::channel::Sender;
 use jsonrpc_client_transports::RpcError;
-use jsonrpc_core::{futures::prelude::*, serde_from_str};
+use jsonrpc_core::{futures::future, futures::prelude::*, serde_from_str};
 use jsonrpc_core_client::{
     transports::duplex::{duplex, Duplex},
     RpcChannel, TypedSubscriptionStream,
@@ -10,11 +10,28 @@ use jsonrpc_server_utils::{
     codecs::StreamCodec, tokio, tokio::codec::Decoder, tokio::net::TcpStream,
 };
 use std::net::SocketAddr;
+use jsonrpc_server_utils::tokio::executor::{
+  Executor , DefaultExecutor
+};
+use std::collections::HashMap;
+use ckb_types::core::{BlockNumber, BlockView};
+use ckb_types::packed::ProposalShortId;
 
-pub(crate) fn run_subscriber(
+#[derive(Default, Debug, Clone)]
+struct Metrics {
+    table: HashMap<BlockNumber, BlockView>,
+    min_number: BlockNumber,
+    max_number: BlockNumber,
+
+    total_block_transactions: i64,
+    proposals: HashMap<ProposalShortId, BlockNumber>,
+}
+
+#[must_use]
+pub(crate) fn subscribe(
     ckb_tcp_listened_address: &str,
     block_sender: Sender<ckb_types::core::BlockView>,
-) {
+) -> Box<dyn Future<Item=(), Error=()>> {
     // Connect and construct the framed interface
     let addr = ckb_tcp_listened_address.parse::<SocketAddr>().unwrap();
     let raw_io = TcpStream::connect(&addr).wait().unwrap();
@@ -33,25 +50,22 @@ pub(crate) fn run_subscriber(
         (sink, stream)
     };
 
-    // Construct rpc client which sends messages(requests) to server
-    let requester = {
-        let (duplex, sender_channel): (Duplex<_, _>, RpcChannel) = duplex(sink, stream);
-
-        // Spawn the duplex handler to background
-        tokio::spawn(duplex.map_err(|_| ()));
-
-        // Construct rpc client which sends messages(requests) to server
-        gen_client::Client::from(sender_channel)
-    };
-
-    // Subscribe `NewTipBlock` from server. We get a typed stream of subscription.
-    let subscriber: TypedSubscriptionStream<String> =
-        requester.subscribe(Topic::NewTipBlock).wait().unwrap();
-
-    tokio::run(subscriber.map_err(|_| ()).for_each(move |message| {
-        let block: ckb_jsonrpc_types::BlockView = serde_from_str(&message).unwrap();
-        let block: ckb_types::core::BlockView = block.into();
-        block_sender.send(block).unwrap();
-        Ok(())
-    }));
+    let (duplex, sender_channel): (Duplex<_, _>, RpcChannel) = duplex(sink, stream);
+    // Construct rpc client which sends messages(requests) to server, and subscribe `NewTipBlock`
+    // from server. We get a typed stream of subscription.
+    let requester =  gen_client::Client::from(sender_channel);
+    let mut metrics = Metrics::default();
+    let subscription_future = requester
+            .subscribe(Topic::NewTipBlock)
+            .and_then(|subscriber: TypedSubscriptionStream<String>| {
+                subscriber
+                    .map_err(|err| panic!("{:?}", err))
+                    .for_each(move |message| {
+                        let block: ckb_jsonrpc_types::BlockView = serde_from_str(&message).expect("invalid json block");
+                        let block: ckb_types::core::BlockView = block.into();
+                        block_sender.send(block).expect("send block into channel");
+                        Ok(())
+                    })
+            });
+    Box::new(duplex.join(subscription_future).map(|_| ()).map_err(|err| panic!("{:?}", err)))
 }

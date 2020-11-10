@@ -1,8 +1,4 @@
 use ckb_metrics::metrics;
-use ckb_metrics_config::{
-    Config as MetricsConfig, Exporter as MetricsExporter, Format as MetricsFormat,
-    Target as MetricsTarget,
-};
 use ckb_metrics_service::init as init_metrics_service;
 use ckb_types::core::{BlockNumber, BlockView};
 use ckb_types::packed::ProposalShortId;
@@ -22,29 +18,7 @@ pub struct Exporter {
 }
 
 impl Exporter {
-    pub fn listen(listen_address: String, receiver: Receiver<BlockView>) {
-        let mut instance = Self::default();
-        instance.listen_(listen_address, receiver);
-    }
-
-    fn listen_(&mut self, listen_address: String, receiver: Receiver<BlockView>) {
-        let config = {
-            let prometheus = MetricsExporter {
-                target: MetricsTarget::Http { listen_address },
-                format: MetricsFormat::Prometheus,
-            };
-            let mut exporter = HashMap::new();
-            exporter.insert("prometheus".to_string(), prometheus);
-            MetricsConfig {
-                threads: 2,
-                histogram_window: 20,
-                histogram_granularity: 1,
-                upkeep_interval: 500,
-                exporter,
-            }
-        };
-        let _guard = init_metrics_service(config).expect("init metrics service");
-
+    pub fn listen(&mut self, receiver: Receiver<BlockView>) {
         while let Ok(block) = receiver.recv() {
             let number = block.number();
             if self.max_number > number {
@@ -56,6 +30,7 @@ impl Exporter {
             self.total_block_transactions += block.transactions().len() as i64;
             self.table.insert(number, block.clone());
 
+            log::info!("bilibili {}", number);
             metrics!(
                 gauge,
                 "ckb.exporter.block_transactions_total",
