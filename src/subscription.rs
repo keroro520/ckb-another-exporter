@@ -11,6 +11,7 @@ use jsonrpc_core_client::{
 use jsonrpc_server_utils::{codecs::StreamCodec, tokio::codec::Decoder, tokio::net::TcpStream};
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::{thread, time};
 
 #[must_use]
 pub(crate) fn subscribe(
@@ -18,7 +19,20 @@ pub(crate) fn subscribe(
 ) -> Box<dyn Future<Item = (), Error = ()> + Send + 'static> {
     // Connect and construct the framed interface
     let addr = ckb_tcp_listened_address.parse::<SocketAddr>().unwrap();
-    let raw_io = TcpStream::connect(&addr).wait().unwrap();
+
+    let raw_io = loop {
+        match TcpStream::connect(&addr).wait() {
+            Ok(raw_io) => {
+                log::info!("[ckb-another-exporter] Tcp stream connected");
+                break raw_io;
+            }
+            _ => {
+                log::info!("[ckb-another-exporter] Waiting for tcp stream connection");
+                thread::sleep(time::Duration::from_secs(5));
+            }
+        }
+    };
+
     let json_codec = StreamCodec::stream_incoming();
     let framed = Decoder::framed(json_codec, raw_io);
 
